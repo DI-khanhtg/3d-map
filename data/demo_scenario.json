@@ -1,0 +1,79 @@
+{
+  "_comment": "Kịch bản dữ liệu GIẢ LẬP cho demo. Khi có video/ảnh drone thật, file inspection.js sẽ do pipeline sinh ra thay vì script này.",
+  "seed": 20261126,
+  "section_length_m": 200,
+  "random_defects": 34,
+  "line": { "id": "JY", "name": "JR山手線", "name_en": "JR Yamanote Line", "city": "東京都", "operator": "（デモ用・架空の点検データ）" },
+
+  "campaigns": [
+    { "id": "2024", "date": "2024-11-14", "label": "2024年度 定期検査", "videos": 16, "images": 3820, "frames": 41250, "flights": 17, "gsd_mm": 2.1 },
+    { "id": "2025", "date": "2025-11-12", "label": "2025年度 定期検査", "videos": 17, "images": 4050, "frames": 44610, "flights": 17, "gsd_mm": 1.8 },
+    { "id": "2026", "date": "2026-11-10", "label": "2026年度 定期検査", "videos": 18, "images": 4210, "frames": 47980, "flights": 18, "gsd_mm": 1.6 }
+  ],
+
+  "defect_types": {
+    "crack":   { "ja": "ひび割れ",       "en": "Crack",          "metric": "長さ", "unit": "cm",  "scale": 16 },
+    "spalling":{ "ja": "剥離・剥落",     "en": "Spalling",       "metric": "面積", "unit": "cm²", "scale": 900 },
+    "rebar":   { "ja": "鉄筋露出",       "en": "Exposed rebar",  "metric": "露出長", "unit": "cm", "scale": 60 },
+    "rust":    { "ja": "腐食",           "en": "Corrosion",      "metric": "面積", "unit": "cm²", "scale": 700 },
+    "leak":    { "ja": "漏水・遊離石灰", "en": "Leakage",        "metric": "面積", "unit": "cm²", "scale": 1500 },
+    "deform":  { "ja": "変形・傾斜",     "en": "Deformation",    "metric": "変位", "unit": "mm",  "scale": 40 },
+    "missing": { "ja": "部材欠損",       "en": "Missing part",   "metric": "箇所数", "unit": "箇所", "scale": 6 }
+  },
+
+  "asset_types": {
+    "viaduct_brick": { "ja": "高架橋（煉瓦アーチ）", "height_m": 7,
+      "components": [ ["アーチ部", 1.0, ["crack","spalling","leak"]], ["橋脚", 1.0, ["crack","spalling","leak"]], ["架線柱", 0.8, ["rust","deform"]] ] },
+    "viaduct_rc": { "ja": "RC高架橋", "height_m": 8,
+      "components": [ ["橋脚", 1.0, ["crack","spalling","rebar"]], ["スラブ・梁", 0.9, ["crack","leak","rebar"]], ["高欄", 0.4, ["crack","spalling"]], ["架線柱", 0.8, ["rust","deform"]] ] },
+    "bridge_steel": { "ja": "鋼橋梁", "height_m": 5,
+      "components": [ ["主桁（鋼）", 0.95, ["rust","deform","missing"]], ["支承", 0.85, ["rust","missing"]], ["橋台", 0.9, ["crack","spalling"]] ] },
+    "earthwork": { "ja": "盛土・切土区間", "height_m": 0,
+      "components": [ ["擁壁", 0.6, ["crack","spalling","leak"]], ["法面", 0.5, ["deform","leak"]], ["架線柱", 0.8, ["rust","deform"]], ["軌道", 0.7, ["deform","missing"]] ] }
+  },
+  "default_asset": "earthwork",
+
+  "_asset_zones_comment": "Vùng kết cấu giữa hai ga (lấy cung ngắn hơn). Mang tính minh hoạ, không phải dữ liệu chính thức.",
+  "asset_zones": [
+    { "from": "東京",   "to": "浜松町", "asset": "viaduct_brick" },
+    { "from": "東京",   "to": "上野",   "asset": "viaduct_rc" },
+    { "from": "田町",   "to": "高輪ゲートウェイ", "asset": "viaduct_rc" },
+    { "near": "高田馬場", "offset_m": 330, "length_m": 140, "asset": "bridge_steel", "label": "神田川橋梁（仮）" },
+    { "near": "大崎",     "offset_m": 420,  "length_m": 120, "asset": "bridge_steel", "label": "目黒川橋梁（仮）" },
+    { "near": "駒込",     "offset_m": -380, "length_m": 100, "asset": "bridge_steel", "label": "跨線橋（仮）" }
+  ],
+
+  "_hotspots_comment": "Các điểm hư hỏng được thiết kế sẵn để kể câu chuyện trong buổi demo. sev = điểm nghiêm trọng AI ước lượng (0..1) cho từng đợt kiểm tra; null = chưa xuất hiện.",
+  "hotspots": [
+    { "near": "有楽町",   "offset_m": 140,  "type": "crack",    "component": "アーチ部",
+      "sev": [0.38, 0.58, 0.88], "value": [5, 8, 14], "width_mm": [0.2, 0.35, 0.7], "conf": [0.81, 0.88, 0.94],
+      "note": "前回比でひび割れ長・幅ともに進展。進展速度が増加傾向。" },
+    { "near": "高田馬場", "offset_m": 320, "type": "rust",     "component": "主桁（鋼）",
+      "sev": [0.30, 0.50, 0.74], "value": [120, 260, 540], "conf": [0.77, 0.85, 0.91],
+      "note": "下フランジ付近の腐食面積が2年で約4.5倍。塗装劣化の可能性。" },
+    { "near": "秋葉原",   "offset_m": 160,  "type": "rebar",    "component": "橋脚",
+      "sev": [null, null, 0.82], "value": [null, null, 38], "conf": [null, null, 0.89],
+      "note": "今回検査で新規検出。かぶりコンクリート剥落後の鉄筋露出と推定。" },
+    { "near": "渋谷",     "offset_m": 300,  "type": "spalling", "component": "擁壁",
+      "sev": [null, 0.42, 0.66], "value": [null, 260, 610], "conf": [null, 0.79, 0.87],
+      "note": "2025年度に初検出。面積が拡大。" },
+    { "near": "御徒町",   "offset_m": 220,  "type": "leak",     "component": "スラブ・梁",
+      "sev": [0.24, 0.30, 0.55], "value": [300, 420, 900], "conf": [0.72, 0.76, 0.83],
+      "note": "遊離石灰を伴う漏水。降雨後の再撮影を推奨。" },
+    { "near": "池袋",     "offset_m": -420, "type": "deform",   "component": "架線柱",
+      "sev": [0.18, 0.22, 0.50], "value": [7, 9, 19], "conf": [0.70, 0.74, 0.82],
+      "note": "点群比較で柱頭の傾斜量が増加。" },
+    { "near": "品川",     "offset_m": 650,  "type": "missing",  "component": "軌道",
+      "sev": [0.12, 0.14, 0.44], "value": [1, 1, 4], "conf": [0.66, 0.71, 0.80],
+      "note": "締結装置の欠損候補。夜間の近接目視で確認要。" }
+  ],
+
+  "grades": [
+    { "id": "AA", "min": 0.85, "ja": "緊急に措置",          "action": "緊急措置・運転規制の要否判断" },
+    { "id": "A1", "min": 0.70, "ja": "早急に措置",          "action": "詳細調査 → 早急に補修計画" },
+    { "id": "A2", "min": 0.50, "ja": "必要な時期に措置",    "action": "補修計画へ登録" },
+    { "id": "B",  "min": 0.30, "ja": "監視（進行の可能性）", "action": "監視強化・次回重点撮影" },
+    { "id": "C",  "min": 0.15, "ja": "重点的に検査",        "action": "次回定期検査で確認" },
+    { "id": "S",  "min": 0.00, "ja": "健全",               "action": "対応不要" }
+  ]
+}

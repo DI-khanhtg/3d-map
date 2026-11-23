@@ -1,0 +1,47 @@
+# Pipeline configuration (copy to config.yaml and adjust)
+# Paths are relative to the repository root.
+
+workspace: workspace                # <workspace>/<campaign>/raw/<flight_id>/*.MP4|*.SRT|*.JPG
+rail_line_js: viewer/data/rail_line.js
+line_closed: true                   # Yamanote is a loop
+section_length_m: 200
+catalog: data/demo_scenario.json    # uses defect_types / asset_types / grades / default_asset
+assets_register: data/assets_register.sample.json   # 構造物台帳 extract: [{from_km, to_km, asset, label}]
+previous_campaign: "2025"           # for ID tracking + deterioration trend (null for the first campaign)
+
+campaigns:                          # all campaigns shown in the viewer, oldest first
+  - { id: "2025", date: "2025-11-12", label: "2025年度 定期検査", videos: 17, images: 4050, frames: 44610, flights: 17, gsd_mm: 1.8 }
+  - { id: "2026", date: "2026-11-10", label: "2026年度 定期検査", videos: 18, images: 4210, frames: 47980, flights: 18, gsd_mm: 1.6 }
+
+camera:                             # e.g. DJI Mavic 3 Enterprise wide camera, 4K video
+  width: 3840
+  height: 2160
+  hfov_deg: 72
+
+keyframes:
+  min_spacing_m: 1.5                # ≈ 80 % overlap at 8-10 m stand-off
+  fallback_every_s: 0.5             # when the video has no .SRT track
+  min_sharpness: 80                 # variance of Laplacian; tune on real footage
+
+reconstruct:
+  dry_run: true                     # set false when Docker + ODM are available
+  project_name: recon
+  odm_image: opendronemap/odm
+  odm_args: ["--pc-quality", "high", "--mesh-size", "300000", "--use-3dmesh", "--3d-tiles", "--orthophoto-resolution", "1"]
+
+detect:
+  kind: mock                        # mock | yolo
+  weights: models/rail-defects-yolo-seg.pt
+  tile: 1280
+  overlap: 0.2
+  conf: 0.35
+  mock_rate: 0.03
+
+localize:
+  face_half_width_m: 5.0            # distance from track centre to the structure face
+  deck_height_m: 7.0
+  cluster_radius_m: 1.5             # same defect seen from several frames
+  match_radius_m: 2.0               # same defect across campaigns
+
+export:
+  viewer_js: viewer/data/inspection.pipeline.js   # rename to inspection.js to show it in the viewer

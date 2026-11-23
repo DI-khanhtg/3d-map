@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Pipeline working data (drone media, frames, reconstructions) - large, keep out of git
+workspace/
+models/
+pipeline/config.yaml
+viewer/data/inspection.pipeline.js
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

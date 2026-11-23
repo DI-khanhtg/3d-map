@@ -1,0 +1,12 @@
+# Python >= 3.10
+pyyaml>=6
+opencv-python>=4.8        # keyframes, image I/O
+numpy>=1.24
+pillow>=10                # EXIF GNSS for non-DJI images
+ultralytics>=8.2          # only when detect.kind = yolo
+# External tools (not pip):
+#   FFmpeg (ffprobe)            - video metadata
+#   Docker + opendronemap/odm   - 3D reconstruction (stage 3)
+# Later / production:
+#   trimesh or open3d           - ray-casting on the reconstructed mesh (stage 5)
+#   py3dtiles / ODM --3d-tiles  - streaming 3D model to the viewer

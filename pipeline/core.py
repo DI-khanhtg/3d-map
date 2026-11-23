@@ -1,0 +1,145 @@
+"""Shared context, data model and I/O helpers for the pipeline stages.
+
+Data model (ontology) used across the pipeline and the viewer:
+
+    Line (JY)
+     └─ Section (200 m, chainage from/to, asset type)        <- "where" for managers
+         └─ Asset / Component (橋脚, 桁, 擁壁, 架線柱, ...)   <- criticality weight
+             └─ Defect (stable ID across campaigns)
+                 └─ Observation (one per Campaign: severity, size, confidence, source frame)
+                     └─ Detection(s) (2D boxes/masks in individual drone frames)
+     Campaign (inspection round) ── Flight ── Media (video / image) ── Frame
+     WorkOrder (created from a Defect after engineer review)
+"""
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from .geo import LineRef
+
+log = logging.getLogger("pipeline")
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+# --------------------------------------------------------------------------- data classes
+@dataclass
+class Media:
+    path: str
+    kind: str                      # "video" | "image"
+    flight_id: str
+    width: int = 0
+    height: int = 0
+    fps: float = 0.0
+    duration_s: float = 0.0
+    # Per-sample GNSS track (from DJI .SRT for videos, EXIF/XMP for images):
+    # [{"t": seconds, "lat":, "lon":, "alt":, "yaw":, "gimbal_pitch":}, ...]
+    track: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class Frame:
+    id: str                        # e.g. "F-2026-03_000132.4"
+    image: str                     # path to extracted JPEG
+    flight_id: str
+    t: float                       # seconds in source video (0 for still images)
+    lat: float
+    lon: float
+    alt: float                     # metres above take-off point (or ellipsoid if known)
+    yaw: float                     # drone heading, deg
+    gimbal_pitch: float            # deg, -90 = nadir, 0 = horizontal
+    sharpness: float = 0.0         # Laplacian variance
+
+
+@dataclass
+class Detection:
+    frame_id: str
+    cls: str                       # crack | spalling | rebar | rust | leak | deform | missing
+    conf: float
+    bbox: list[float]              # [x0, y0, x1, y1] in pixels
+    mask_area_px: float = 0.0
+    length_px: float = 0.0         # skeleton length for cracks
+    width_px: float = 0.0
+    # filled by localisation
+    lon: float | None = None
+    lat: float | None = None
+    z: float | None = None
+    gsd_mm: float | None = None    # ground sample distance at the hit point
+
+
+@dataclass
+class Observation:
+    sev: float
+    conf: float
+    value: float
+    frame: dict                    # {"flight": ..., "t": ...}
+    width_mm: float | None = None
+
+
+def to_dict(obj: Any) -> Any:
+    return asdict(obj) if hasattr(obj, "__dataclass_fields__") else obj
+
+
+# --------------------------------------------------------------------------- context
+class Context:
+    """Everything a stage needs: config, campaign id, workspace paths, rail line."""
+
+    def __init__(self, config: dict, campaign: str):
+        self.cfg = config
+        self.campaign = campaign
+        self.ws = (ROOT / config["workspace"] / campaign).resolve()
+        self.raw = self.ws / "raw"
+        self._line: LineRef | None = None
+        self._line_meta: dict | None = None
+
+    def stage_dir(self, name: str) -> Path:
+        p = self.ws / name
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    # rail centreline: re-use the file the viewer already loads
+    def _load_line(self) -> None:
+        meta = read_js_var(ROOT / self.cfg["rail_line_js"])
+        self._line_meta = meta
+        self._line = LineRef(meta["coordinates"], closed=bool(self.cfg.get("line_closed", True)))
+
+    @property
+    def line(self) -> LineRef:
+        if self._line is None:
+            self._load_line()
+        return self._line  # type: ignore[return-value]
+
+    @property
+    def line_meta(self) -> dict:
+        if self._line_meta is None:
+            self._load_line()
+        return self._line_meta  # type: ignore[return-value]
+
+
+# --------------------------------------------------------------------------- I/O
+def read_json(path: Path) -> Any:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def write_json(path: Path, data: Any) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=1, default=to_dict), encoding="utf-8")
+    log.info("wrote %s", path)
+
+
+def read_js_var(path: Path) -> Any:
+    """Parse `window.X = {...};` files written for the viewer."""
+    text = Path(path).read_text(encoding="utf-8")
+    start = text.index("=") + 1
+    return json.loads(text[start:].strip().rstrip(";"))
+
+
+def write_js_var(path: Path, var: str, data: Any) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    body = json.dumps(data, ensure_ascii=False, separators=(",", ":"), default=to_dict)
+    Path(path).write_text(f"// AUTO-GENERATED by pipeline/run.py\nwindow.{var} = {body};\n", encoding="utf-8")
+    log.info("wrote %s (%d bytes)", path, len(body))
