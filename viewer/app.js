@@ -1,14 +1,31 @@
 /* Rail Inspection 3D Map — viewer
- * Reads two data files produced by the processing pipeline:
- *   window.RAIL_LINE   (data/rail_line.js)   rail centreline + stations
- *   window.INSPECTION  (data/inspection.js)  campaigns, sections, defects (schema rail-inspection/0.1)
+ * Data files produced by the processing pipeline (one folder per line):
+ *   window.RAIL_LINES  (data/lines.js)              list of available lines
+ *   window.RAIL_LINE   (data/<id>/rail_line.js)     rail centreline + stations
+ *   window.INSPECTION  (data/<id>/inspection.js)    campaigns, sections, defects (schema rail-inspection/0.2)
  * Renders them on MapLibre (base map + 3D buildings) with a deck.gl overlay.
+ * The line is chosen with ?line=<id> (remembered in localStorage).
  */
 (() => {
   'use strict';
+  const LINES = window.RAIL_LINES || [];
+  const fail = msg => { document.body.innerHTML = `<p style="padding:24px">${msg}</p>`; };
+  if (!LINES.length) { fail('data/lines.js が見つかりません。tools/build_demo_data.ps1 を実行してください。'); return; }
+  let id = new URLSearchParams(location.search).get('line');
+  if (!id) { try { id = localStorage.getItem('railDemo.line'); } catch (e) { /* storage blocked */ } }
+  if (!LINES.some(l => l.id === id)) id = LINES[0].id;
+  try { localStorage.setItem('railDemo.line', id); } catch (e) { /* storage blocked */ }
+  const load = src => new Promise((ok, ng) => {
+    const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => ng(src); document.head.appendChild(s);
+  });
+  Promise.all([load(`data/${id}/rail_line.js`), load(`data/${id}/inspection.js`)])
+    .then(() => main(LINES, id), src => fail(`${src} を読み込めません。tools/build_demo_data.ps1 を実行してください。`));
+})();
+
+function main(LINES, lineId) {
+  'use strict';
   const L = window.RAIL_LINE;
   const D = window.INSPECTION;
-  if (!L || !D) { document.body.innerHTML = '<p style="padding:24px">data/*.js が見つかりません。tools/build_demo_data.ps1 を実行してください。</p>'; return; }
 
   // ------------------------------------------------------------------ constants & helpers
   const NC = D.campaigns.length;
@@ -16,7 +33,7 @@
   const GCOL = { AA: [255, 61, 87], A1: [255, 111, 69], A2: [255, 166, 43], B: [240, 208, 60], C: [52, 199, 138], S: [52, 199, 138] };
   const CAT = g => (g === 'AA' || g === 'A1') ? 'red' : g === 'A2' ? 'orange' : g === 'B' ? 'yellow' : 'green';
   const CAT_COL = { red: [255, 61, 87], orange: [255, 166, 43], yellow: [240, 208, 60], green: [46, 170, 120] };
-  const MAJOR = new Set(['東京', '品川', '渋谷', '新宿', '池袋', '田端', '上野', '大崎', '秋葉原']);
+  const MAJOR = new Set(L.major || []);
   const FONT = '"Noto Sans JP","Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif';
 
   const defById = new Map(D.defects.map(d => [d.id, d]));
@@ -39,21 +56,23 @@
       title: '鉄道インフラ点検 3Dマップ', list: '一覧', compare: '前回比較', flights: '飛行ルート', bldg: '3D建物', home: '全体表示',
       pipeline: '処理パイプライン', prio: '優先対応リスト', prioSub: 'リスク順 · AI提案', strip: 'キロ程ストリップ', stripHint: 'クリックで区間へ移動',
       banner: 'デモ用の擬似点検データ · 線形 © OpenStreetMap contributors', langBtn: 'EN', langTitle: 'Switch to English',
+      catLabel: '表示対象', all: 'すべて', structure: '構造物', track: '軌道', lineTitle: '路線を切り替え',
     },
     en: {
       title: 'Rail Infrastructure Inspection 3D Map', list: 'List', compare: 'Compare prev.', flights: 'Flight paths', bldg: '3D buildings', home: 'Overview',
       pipeline: 'Processing pipeline', prio: 'Priority list', prioSub: 'by risk · AI proposal', strip: 'Chainage strip', stripHint: 'click to jump to a section',
       banner: 'Demo with simulated inspection data · Track geometry © OpenStreetMap contributors', langBtn: '日本語', langTitle: '日本語に切り替え',
+      catLabel: 'Show', all: 'All', structure: 'Structure', track: 'Track', lineTitle: 'Switch line',
     },
   };
   const tr = k => UI[lang][k];
   const ST_EN = Object.fromEntries(L.stations.map(s => [s.name, s.name_en || s.name]));
   const COMP_EN = {
-    'アーチ部': 'Arch', '橋脚': 'Pier', '架線柱': 'Catenary pole', 'スラブ・梁': 'Slab / beam', '高欄': 'Parapet',
-    '主桁（鋼）': 'Main girder (steel)', '支承': 'Bearing', '橋台': 'Abutment', '擁壁': 'Retaining wall', '法面': 'Slope', '軌道': 'Track',
+    '橋脚': 'Pier', '架線柱': 'Catenary pole', 'スラブ・梁': 'Slab / beam', '高欄': 'Parapet',
+    '主桁（鋼）': 'Main girder (steel)', '支承': 'Bearing', '橋台': 'Abutment', '擁壁': 'Retaining wall', '法面': 'Slope',
+    'レール': 'Rail', '道床': 'Ballast', 'まくらぎ': 'Sleepers', '締結装置': 'Fastenings',
   };
-  const ASSET_EN = { viaduct_brick: 'Brick arch viaduct', viaduct_rc: 'RC viaduct', bridge_steel: 'Steel bridge', earthwork: 'Embankment / cutting' };
-  const ASSET_LABEL_EN = { '目黒川橋梁（仮）': 'Meguro River bridge (tentative)', '神田川橋梁（仮）': 'Kanda River bridge (tentative)', '跨線橋（仮）': 'Overbridge (tentative)' };
+  const ASSET_EN = { viaduct_rc: 'RC (concrete) viaduct', bridge_steel: 'Steel bridge', earthwork: 'Embankment / cutting' };
   const GRADE_EN = {
     AA: ['Urgent action', 'Emergency measures; decide on operating restrictions'],
     A1: ['Prompt action', 'Detailed survey → prompt repair plan'],
@@ -62,26 +81,31 @@
     C: ['Focus at next inspection', 'Check at next periodic inspection'],
     S: ['Sound', 'No action needed'],
   };
-  const METRIC_EN = { crack: 'Length', spalling: 'Area', rebar: 'Exposed length', rust: 'Area', leak: 'Area', deform: 'Displacement', missing: 'Count' };
-  const NOTE_EN = {
-    '前回比でひび割れ長・幅ともに進展。進展速度が増加傾向。': 'Crack length and width both grew since the last inspection; the growth rate is accelerating.',
-    '下フランジ付近の腐食面積が2年で約4.5倍。塗装劣化の可能性。': 'Corroded area near the bottom flange grew ~4.5× in 2 years. Possible coating deterioration.',
-    '今回検査で新規検出。かぶりコンクリート剥落後の鉄筋露出と推定。': 'Newly detected in this inspection. Likely rebar exposed after the cover concrete spalled.',
-    '2025年度に初検出。面積が拡大。': 'First detected in FY2025. The area is expanding.',
-    '遊離石灰を伴う漏水。降雨後の再撮影を推奨。': 'Leakage with efflorescence. Re-shoot after rainfall recommended.',
-    '点群比較で柱頭の傾斜量が増加。': 'Point-cloud comparison shows increasing tilt at the pole top.',
-    '締結装置の欠損候補。夜間の近接目視で確認要。': 'Possible missing rail fastenings. Confirm by close visual check at night.',
-  };
   const stName = n => EN(lang) ? (ST_EN[n] || n) : n;
   const typeName = t => EN(lang) ? typeInfo(t).en : typeInfo(t).ja;
   const compName = c => EN(lang) ? (COMP_EN[c] || c) : c;
-  const assetName = a => EN(lang) ? ASSET_EN[a] : D.asset_types[a].ja;
-  const assetLabel = s => s.asset_label ? (EN(lang) ? (ASSET_LABEL_EN[s.asset_label] || s.asset_label) : s.asset_label) : null;
+  const assetName = a => EN(lang) ? (ASSET_EN[a] || a) : D.asset_types[a].ja;
+  const assetLabel = s => s.asset_label ? (EN(lang) ? (s.asset_label_en || s.asset_label) : s.asset_label) : null;
   const gradeName = g => EN(lang) ? GRADE_EN[g][0] : gradeInfo(g).ja;
   const gradeAction = g => EN(lang) ? GRADE_EN[g][1] : gradeInfo(g).action;
-  const metric = t => EN(lang) ? METRIC_EN[t] : typeInfo(t).metric;
-  const unit = t => EN(lang) && typeInfo(t).unit === '箇所' ? 'pcs' : typeInfo(t).unit;
-  const noteText = d => EN(lang) ? (NOTE_EN[d.note] || d.note) : d.note;
+  const metric = t => EN(lang) ? (typeInfo(t).metric_en || typeInfo(t).metric) : typeInfo(t).metric;
+  const unit = t => EN(lang) ? (typeInfo(t).unit_en || typeInfo(t).unit) : typeInfo(t).unit;
+  const noteText = d => EN(lang) ? (d.note_en || d.note) : d.note;
+  const lineName = l => EN(lang) ? `${l.city_en} · ${l.name_en}` : `${l.city} · ${l.name}`;
+
+  // defect category filter: all | structure | track
+  const catOf = d => d.cat || typeInfo(d.type).cat || 'structure';
+  const inCat = d => state.cat === 'all' || catOf(d) === state.cat;
+  const catTag = d => catOf(d) === 'track' ? ` <span class="cat-tag">${tr('track')}</span>` : '';
+  const gradeOf = r => (D.grades.find(g => r >= g.min) || { id: 'S' }).id;
+  // section risk under the current filter (unfiltered = value from the data file)
+  function secRisk(s, i) {
+    if (state.cat === 'all') return s.risk[i];
+    let mx = 0.05;
+    for (const id of s.defects) { const d = defById.get(id); if (inCat(d) && d.risk[i] != null && d.risk[i] > mx) mx = d.risk[i]; }
+    return mx;
+  }
+  const secGrade = (s, i) => state.cat === 'all' ? s.grade[i] : gradeOf(secRisk(s, i));
   const campLabel = cp => EN(lang) ? `FY${cp.id} periodic inspection` : cp.label;
   const fmt = (n, d = 0) => n == null ? '—' : Number(n).toLocaleString(EN(lang) ? 'en-US' : 'ja-JP', { minimumFractionDigits: d, maximumFractionDigits: d });
   const between = s => EN(lang) ? `${stName(s.between[0])} – ${stName(s.between[1])}` : `${s.between[0]}〜${s.between[1]}`;
@@ -107,7 +131,7 @@
 
   // ------------------------------------------------------------------ state
   const state = {
-    c: NC - 1, compare: false, flights: true, buildings: true,
+    c: NC - 1, compare: false, flights: true, buildings: true, cat: 'all',
     sel: null,               // {kind:'defect'|'section', id}
     zoom: 12.5,
     cloud: null,             // {id, points, anchorZ}
@@ -200,40 +224,52 @@
     // ground
     for (let i = 0; i < 4000; i++) add((r() - 0.5) * LEN * 1.2, (r() - 0.5) * 40, r() * 0.05, shade([48, 56, 52], 14));
 
-    if (d.asset === 'viaduct_rc' || d.asset === 'viaduct_brick') {
-      const brick = d.asset === 'viaduct_brick';
-      const base = brick ? [146, 80, 58] : [150, 154, 158];
-      const W = 10, T = 1.1, span = brick ? 12 : 10;
-      for (let i = 0; i < 7000; i++) add((r() - 0.5) * LEN, (r() - 0.5) * W, H + 0.02 * r(), shade([92, 90, 86]));     // deck / ballast
-      for (let i = 0; i < 4000; i++) { const s = r() < 0.5 ? -1 : 1; add((r() - 0.5) * LEN, s * W / 2, H - T + r() * (T + 1.0), shade(base)); } // girders + parapet
-      // rails
-      for (let i = 0; i < 1500; i++) { const y = (r() < 0.5 ? -1 : 1) * 0.53 + (r() < 0.5 ? -2.2 : 2.2); add((r() - 0.5) * LEN, y, H + 0.18, [190, 196, 204]); }
-      if (brick) {
-        const rr = span / 2 - 0.6, spring = H - T - rr - 0.2;
-        for (let i = 0; i < 9000; i++) {
-          const x = (r() - 0.5) * LEN, z = r() * (H - T), s = r() < 0.5 ? -1 : 1;
-          const ax = x - (Math.floor(x / span) * span + span / 2);   // distance to arch centre
-          const inOpen = (z <= spring && Math.abs(ax) < rr) || (z > spring && ax * ax + (z - spring) ** 2 < rr * rr);
-          if (inOpen) continue;
-          add(x, s * W / 2, z, shade(base, 34));
+    // Track: rails (+ sleepers on ballast). For a track-geometry defect the rails of the affected
+    // track are bent around the defect (exaggerated so it is visible), with the design line in cyan.
+    const geom = d.type === 'track_geom';
+    const sevNow = d.obs[state.c] ? d.obs[state.c].sev : 0.3;
+    const bump = x => geom ? (0.25 + 0.55 * sevNow) * Math.exp(-((x / 7) ** 2)) : 0;
+    const RAIL = [190, 196, 204];
+    function track(yc, z, n, sleepers, bent) {
+      for (let i = 0; i < n; i++) {
+        const x = (r() - 0.5) * LEN, y = yc + (r() < 0.5 ? -0.53 : 0.53) + (bent ? bump(x) : 0);
+        add(x, y + (r() - 0.5) * 0.07, z + r() * 0.04, RAIL);
+      }
+      if (sleepers) {
+        for (let x = -LEN / 2; x < LEN / 2; x += 0.6) {
+          const off = bent ? bump(x) : 0;
+          for (let i = 0; i < 26; i++) add(x + (r() - 0.5) * 0.2, yc + off + (r() - 0.5) * 2.4, z - 0.08, shade([150, 148, 142], 18));
         }
-        // arch ring sits at x = span/2 (+k*span); piers are around x = 0
-        anchor = d.component === '架線柱' ? [0, W / 2 + 0.4, H + 4]
-          : d.component === 'アーチ部' ? [span / 2, W / 2, spring + rr + 0.15] : [0, W / 2, spring * 0.8];
-      } else {
-        for (let k = -2; k <= 2; k++) {
-          for (const y0 of [-(W / 2 - 1.6), W / 2 - 1.6]) {
-            for (let i = 0; i < 700; i++) {
-              const f = Math.floor(r() * 4), u = (r() - 0.5) * 1.2, z = r() * (H - T);
-              const [x, y] = f === 0 ? [k * span - 0.6, y0 + u] : f === 1 ? [k * span + 0.6, y0 + u] : f === 2 ? [k * span + u, y0 - 0.6] : [k * span + u, y0 + 0.6];
-              add(x, y, z, shade(base));
-            }
+      }
+      if (bent) for (let x = -14; x <= 14; x += 0.12) for (const s of [-0.53, 0.53]) add(x, yc + s, z + 0.06, [56, 189, 248]);
+    }
+    const trackAnchor = (yc, z) => d.component === '道床' ? [0, yc + 1.5 + bump(0), z - 0.15]
+      : d.component === 'まくらぎ' ? [0, yc - 0.95, z - 0.08]
+      : d.component === '締結装置' ? [0, yc + 0.53 + bump(0) + 0.15, z - 0.03]
+      : [0, yc + 0.53 + bump(0), z];
+    const isTrackComp = ['レール', '道床', 'まくらぎ', '締結装置'].includes(d.component);
+
+    if (d.asset === 'viaduct_rc') {
+      const base = [150, 154, 158];
+      const W = 10, T = 1.1, span = 10;
+      for (let i = 0; i < 7000; i++) add((r() - 0.5) * LEN, (r() - 0.5) * W, H + 0.02 * r(), shade([92, 90, 86]));     // concrete slab / slab track
+      for (let i = 0; i < 4000; i++) { const s = r() < 0.5 ? -1 : 1; add((r() - 0.5) * LEN, s * W / 2, H - T + r() * (T + 1.0), shade(base)); } // girders + parapet
+      track(-2.2, H + 0.18, 800, false, false);
+      track(2.2, H + 0.18, 800, false, true);
+      // RC piers (rectangular columns)
+      for (let k = -2; k <= 2; k++) {
+        for (const y0 of [-(W / 2 - 1.6), W / 2 - 1.6]) {
+          for (let i = 0; i < 700; i++) {
+            const f = Math.floor(r() * 4), u = (r() - 0.5) * 1.2, z = r() * (H - T);
+            const [x, y] = f === 0 ? [k * span - 0.6, y0 + u] : f === 1 ? [k * span + 0.6, y0 + u] : f === 2 ? [k * span + u, y0 - 0.6] : [k * span + u, y0 + 0.6];
+            add(x, y, z, shade(base));
           }
         }
-        anchor = d.component === '橋脚' ? [0, W / 2 - 1.0, (H - T) * 0.55]
-          : d.component === '高欄' ? [0, W / 2, H + 0.5]
-          : d.component === '架線柱' ? [0, W / 2 + 0.4, H + 4] : [3, W / 2, H - T / 2];
       }
+      anchor = isTrackComp ? trackAnchor(2.2, H + 0.18)
+        : d.component === '橋脚' ? [0, W / 2 - 1.0, (H - T) * 0.55]
+        : d.component === '高欄' ? [0, W / 2, H + 0.5]
+        : d.component === '架線柱' ? [0, W / 2 + 0.4, H + 4] : [3, W / 2, H - T / 2];
       // catenary poles
       for (let k = -1; k <= 1; k++) for (let i = 0; i < 300; i++) add(k * 25 + (r() - 0.5) * 0.35, W / 2 + 0.4 + (r() - 0.5) * 0.35, H + r() * 7, shade([120, 124, 128]));
     } else if (d.asset === 'bridge_steel') {
@@ -246,24 +282,28 @@
         }
       }
       for (let i = 0; i < 3000; i++) add((r() - 0.5) * LEN * 0.7, (r() - 0.5) * 4.6, H + 0.15, shade([90, 88, 84]));
+      track(0, H + 0.33, 900, false, true);
       for (const sx of [-1, 1]) for (let i = 0; i < 2200; i++) add(sx * LEN * 0.35 + sx * r() * 4, (r() - 0.5) * 7, r() * H, shade([150, 152, 150]));
       for (let i = 0; i < 2500; i++) add((r() - 0.5) * LEN * 0.66, (r() - 0.5) * 30, -0.6, shade([30, 70, 110], 18));      // river
-      anchor = d.component === '支承' ? [LEN * 0.35 - 0.5, 1.6, H - 2.4] : d.component === '橋台' ? [LEN * 0.35, -1, H * 0.5] : [2, 1.6, H - 1.4];
+      anchor = isTrackComp ? trackAnchor(0, H + 0.33)
+        : d.component === '支承' ? [LEN * 0.35 - 0.5, 1.6, H - 2.4] : d.component === '橋台' ? [LEN * 0.35, -1, H * 0.5] : [2, 1.6, H - 1.4];
     } else {
-      // earthwork: ballast + rails + retaining wall + slope + poles
+      // earthwork: ballast + sleepers + rails + retaining wall + slope + poles
       for (let i = 0; i < 5000; i++) add((r() - 0.5) * LEN, (r() - 0.5) * 6, 0.3 + r() * 0.1, shade([96, 90, 84]));
-      for (let i = 0; i < 1500; i++) add((r() - 0.5) * LEN, (r() < 0.5 ? -1 : 1) * 0.53, 0.5, [190, 196, 204]);
+      track(0, 0.5, 1200, true, true);
       for (let i = 0; i < 6000; i++) add((r() - 0.5) * LEN, 6, r() * 4, shade([150, 150, 146]));
       for (let i = 0; i < 6000; i++) { const t = r(); add((r() - 0.5) * LEN, 6 + t * 7, 4 + t * 4, shade([54, 92, 60], 30)); }
       for (let k = -1; k <= 1; k++) for (let i = 0; i < 300; i++) add(k * 25 + (r() - 0.5) * 0.35, -3.6 + (r() - 0.5) * 0.35, r() * 8, shade([120, 124, 128]));
-      anchor = d.component === '擁壁' ? [0, 6, 2] : d.component === '法面' ? [0, 9, 5.7] : d.component === '架線柱' ? [0, -3.6, 6.5] : [0, 0.53, 0.5];
+      anchor = isTrackComp ? trackAnchor(0, 0.5)
+        : d.component === '擁壁' ? [0, 6, 2] : d.component === '法面' ? [0, 9, 5.7] : d.component === '架線柱' ? [0, -3.6, 6.5] : [0, 0.53, 0.5];
       if (d.component === '架線柱') for (let i = 0; i < 300; i++) add((r() - 0.5) * 0.35 + r() * 0.3, -3.6 + (r() - 0.5) * 0.35, r() * 8, shade([120, 124, 128]));
     }
 
     // defect patch: recolour nearby points + add a dense cluster
     const gc = GCOL[d.grade[state.c] || 'B'];
     for (const q of pts) { const dx = q.p[0] - anchor[0], dy = q.p[1] - anchor[1], dz = q.p[2] - anchor[2]; if (dx * dx + dy * dy + dz * dz < 2.2) q.c = gc; }
-    for (let i = 0; i < 600; i++) add(anchor[0] + (r() - 0.5) * 1.4, anchor[1] + (r() - 0.5) * 0.4, anchor[2] + (r() - 0.5) * 1.4, gc);
+    const spread = isTrackComp ? [1.8, 0.35, 0.12] : [1.4, 0.4, 1.4];   // track defects lie flat on the track
+    for (let i = 0; i < 600; i++) add(anchor[0] + (r() - 0.5) * spread[0], anchor[1] + (r() - 0.5) * spread[1], anchor[2] + (r() - 0.5) * spread[2], gc);
 
     // local (x along track, y right of track) -> east/north, defect anchor at origin
     const b = d.bearing * Math.PI / 180, sb = Math.sin(b), cb = Math.cos(b);
@@ -279,10 +319,10 @@
     const c = state.c;
     if (state.compare) {
       if (c === 0) return [90, 110, 130, 200];
-      const dv = s.risk[c] - s.risk[c - 1];
+      const dv = secRisk(s, c) - secRisk(s, c - 1);
       return dv > 0.15 ? [255, 61, 87, 255] : dv > 0.05 ? [255, 166, 43, 255] : dv < -0.05 ? [56, 189, 248, 230] : [80, 96, 114, 200];
     }
-    return [...CAT_COL[CAT(s.grade[c])], 255];
+    return [...CAT_COL[CAT(secGrade(s, c))], 255];
   }
 
   function renderLayers() {
@@ -291,7 +331,7 @@
     const pillar = [{ r: 55, h: 1500 }, { r: 14, h: 260 }, { r: 0, h: 0 }][zb];
     const selDef = state.sel && state.sel.kind === 'defect' ? state.sel.id : null;
     const selSec = state.sel ? (state.sel.kind === 'section' ? state.sel.id : defById.get(state.sel.id).section) : null;
-    const present = D.defects.filter(d => d.obs[c]);
+    const present = D.defects.filter(d => d.obs[c] && inCat(d));
     const serious = present.filter(d => GRANK[d.grade[c]] <= GRANK.B);
 
     const layers = [];
@@ -303,11 +343,11 @@
     }
     layers.push(new deck.PathLayer({
       id: 'sections', data: D.sections, getPath: s => s.path, getColor: sectionColor,
-      getWidth: s => s.id === selSec ? 11 : (CAT(s.grade[c]) === 'green' && !state.compare ? 4 : 7),
+      getWidth: s => s.id === selSec ? 11 : (CAT(secGrade(s, c)) === 'green' && !state.compare ? 4 : 7),
       widthUnits: 'pixels', capRounded: true, jointRounded: true,
       pickable: true, autoHighlight: true, highlightColor: [56, 189, 248, 230],
       onClick: info => info.object && select('section', info.object.id),
-      updateTriggers: { getColor: [c, state.compare], getWidth: [c, selSec, state.compare] },
+      updateTriggers: { getColor: [c, state.compare, state.cat], getWidth: [c, selSec, state.compare, state.cat] },
     }));
     layers.push(new deck.ColumnLayer({
       // hidden at street level (zb 2): the dots + point cloud take over there
@@ -354,12 +394,12 @@
     const style = { background: 'rgba(10,14,19,0.95)', color: '#e6edf3', border: '1px solid #2b3847', borderRadius: '8px', fontSize: '12px', padding: '8px 10px', maxWidth: '260px' };
     if (layer.id === 'sections') {
       const s = object;
-      const n = s.defects.filter(id => defById.get(id).obs[c]).length;
-      return { html: `<b>${s.id}</b> · ${between(s)}<br>${s.from_km.toFixed(1)}–${s.to_km.toFixed(1)} km · ${assetLabel(s) || assetName(s.asset)}<br>${J('区間リスク', 'Section risk')} <b>${s.risk[c].toFixed(2)}</b> (${s.grade[c]}) · ${J(`損傷 ${n}件`, `${n} defect${n === 1 ? '' : 's'}`)}`, style };
+      const n = s.defects.filter(id => { const d = defById.get(id); return d.obs[c] && inCat(d); }).length;
+      return { html: `<b>${s.id}</b> · ${between(s)}<br>${s.from_km.toFixed(1)}–${s.to_km.toFixed(1)} km · ${assetLabel(s) || assetName(s.asset)}<br>${J('区間リスク', 'Section risk')} <b>${secRisk(s, c).toFixed(2)}</b> (${secGrade(s, c)}) · ${J(`損傷 ${n}件`, `${n} defect${n === 1 ? '' : 's'}`)}`, style };
     }
     if (layer.id === 'defects' || layer.id === 'pillars') {
       const d = object, o = d.obs[c];
-      return { html: `<b>${d.grade[c]}</b> · ${typeName(d.type)} (${compName(d.component)})<br>${d.km.toFixed(2)} km · ${between(secById.get(d.section))}<br>${J('リスク', 'Risk')} <b>${d.risk[c].toFixed(2)}</b> · ${J('AI確信度', 'AI confidence')} ${Math.round(o.conf * 100)}%`, style };
+      return { html: `<b>${d.grade[c]}</b> · ${typeName(d.type)} (${compName(d.component)})${catTag(d)}<br>${d.km.toFixed(2)} km · ${between(secById.get(d.section))}<br>${J('リスク', 'Risk')} <b>${d.risk[c].toFixed(2)}</b> · ${J('AI確信度', 'AI confidence')} ${Math.round(o.conf * 100)}%`, style };
     }
     return null;
   }
@@ -387,11 +427,19 @@
   // ------------------------------------------------------------------ left panel
   function renderLeft() {
     const c = state.c, cp = D.campaigns[c];
-    const present = D.defects.filter(d => d.obs[c]);
+    const all = D.defects.filter(d => d.obs[c]);
+    const present = all.filter(inCat);
+    const nCls = Object.keys(D.defect_types).length;
+    const byAll = { AA: 0, A1: 0, A2: 0, B: 0, C: 0, S: 0 };
+    all.forEach(d => byAll[d.grade[c]]++);
     const by = { AA: 0, A1: 0, A2: 0, B: 0, C: 0, S: 0 };
     present.forEach(d => by[d.grade[c]]++);
     const fresh = c > 0 ? present.filter(d => !d.obs[c - 1]).length : 0;
     const prog = c > 0 ? present.filter(d => d.obs[c - 1] && d.obs[c].sev - d.obs[c - 1].sev >= 0.1).length : 0;
+
+    const nCat = k => k === 'all' ? all.length : all.filter(d => catOf(d) === k).length;
+    $('catSeg').innerHTML = `<span class="lbl">${tr('catLabel')}</span>` + ['all', 'structure', 'track'].map(k =>
+      `<button type="button" data-cat="${k}" aria-pressed="${state.cat === k}">${tr(k)} <span class="n">${nCat(k)}</span></button>`).join('');
 
     $('campaignChip').textContent = `${cp.date} ${D.mock ? '· MOCK' : ''}`;
     const kept = fmt(Math.round(cp.frames * 0.21));
@@ -399,16 +447,16 @@
       ['Data ingest', 'MP4 + SRT', `${cp.videos} videos · ${fmt(cp.images)} photos · ${cp.flights} flights`],
       ['Keyframe selection', 'OpenCV', `${fmt(cp.frames)} → ${kept} frames (blur & duplicates removed)`],
       ['3D reconstruction', 'SfM / MVS', `Point cloud & mesh · GSD ${cp.gsd_mm} mm/px`],
-      ['AI damage detection', 'Detect + Seg', `${present.length} defect candidates (7 classes)`],
+      ['AI damage detection', 'Detect + Seg', `${all.length} defect candidates (${nCls} classes: structure + track)`],
       ['Localisation', 'Georef / km', `${D.sections.length} sections × ${D.section_length_m} m, chainage assigned`],
-      ['Assessment & priority', 'Risk', `AA ${by.AA} · A1 ${by.A1} · A2 ${by.A2} · B ${by.B}`],
+      ['Assessment & priority', 'Risk', `AA ${byAll.AA} · A1 ${byAll.A1} · A2 ${byAll.A2} · B ${byAll.B}`],
     ] : [
       ['データ取込', 'Ingest', `動画 ${cp.videos}本 · 静止画 ${fmt(cp.images)}枚 · ${cp.flights}フライト`],
       ['フレーム選別', 'Keyframes', `${fmt(cp.frames)} → ${kept} 枚（ブレ・重複除去）`],
       ['3D再構築', 'SfM / MVS', `点群・メッシュ · GSD ${cp.gsd_mm} mm/px`],
-      ['AI損傷検出', 'Detect + Seg', `損傷候補 ${present.length} 件（7クラス）`],
+      ['AI損傷検出', 'Detect + Seg', `損傷候補 ${all.length} 件（${nCls}クラス：構造物＋軌道）`],
       ['位置特定', 'Georef / km', `${D.sections.length}区間 × ${D.section_length_m} m にキロ程付与`],
-      ['評価・優先度', 'Risk', `AA ${by.AA} · A1 ${by.A1} · A2 ${by.A2} · B ${by.B}`],
+      ['評価・優先度', 'Risk', `AA ${byAll.AA} · A1 ${byAll.A1} · A2 ${byAll.A2} · B ${byAll.B}`],
     ];
     $('pipeline').innerHTML = steps.map(s => `<li><span class="st-name">${s[0]}</span><span class="st-en">${s[1]}</span><div class="st-out">${s[2]}</div></li>`).join('');
 
@@ -425,12 +473,17 @@
       const t = trendTag(d, c);
       return `<li data-id="${d.id}" class="${d.id === selId ? 'sel' : ''}">
         <span class="badge g-${d.grade[c]}">${d.grade[c]}</span>
-        <div style="min-width:0"><div class="t">${typeName(d.type)} · ${compName(d.component)}</div>
+        <div style="min-width:0"><div class="t">${typeName(d.type)} · ${compName(d.component)}${catTag(d)}</div>
         <div class="s">${between(secById.get(d.section))} · ${d.km.toFixed(2)} km</div></div>
         <div class="r">${d.risk[c].toFixed(2)}<div class="d ${t.cls}">${t.txt}</div></div></li>`;
     }).join('');
   }
   $('prio').addEventListener('click', e => { const li = e.target.closest('li[data-id]'); if (li) select('defect', li.dataset.id); });
+  $('catSeg').addEventListener('click', e => {
+    const b = e.target.closest('button[data-cat]'); if (!b) return;
+    state.cat = b.dataset.cat;
+    renderAll();
+  });
 
   // ------------------------------------------------------------------ detail drawer
   function renderDetail() {
@@ -444,7 +497,7 @@
     const c = state.c, o = d.obs[c], s = secById.get(d.section), ti = typeInfo(d.type);
     const trendTitle = `${J('推移', 'Trend')} · ${metric(d.type)} (${unit(d.type)})`;
     const head = (g) => `<div class="det-head"><span class="badge big g-${g || 'none'}">${g || '—'}</span>
-      <div class="tt"><div class="det-title">${typeName(d.type)} <span class="muted small mono">${d.id}</span></div>
+      <div class="tt"><div class="det-title">${typeName(d.type)} <span class="muted small mono">${d.id}</span>${catTag(d)}</div>
       <div class="det-sub">${assetLabel(s) || assetName(d.asset)} · ${compName(d.component)}</div></div>
       <button class="x" data-act="close" aria-label="${J('閉じる', 'Close')}">×</button></div>`;
     const where = `<dl class="kv"><dt>${J('位置', 'Location')}</dt><dd>${between(s)} · <span class="mono">${d.km.toFixed(3)} km</span></dd>
@@ -487,12 +540,13 @@
   }
 
   function sectionHTML(s) {
-    const c = state.c, g = s.grade[c];
-    const defs = s.defects.map(id => defById.get(id));
+    const c = state.c, g = secGrade(s, c);
+    const defs = s.defects.map(id => defById.get(id)).filter(inCat);
+    const filt = state.cat === 'all' ? '' : ` · ${tr(state.cat)}`;
     const bars = D.campaigns.map((cp, i) => {
-      const h = Math.max(3, s.risk[i] * 60);
-      return `<g transform="translate(${30 + i * 90},0)"><rect x="0" y="${70 - h}" width="44" height="${h}" rx="3" fill="${rgb(CAT_COL[CAT(s.grade[i])])}" opacity="${i === c ? 1 : 0.45}"/>
-        <text x="22" y="${64 - h}" text-anchor="middle" fill="#e6edf3" font-size="11" font-family="JetBrains Mono">${s.risk[i].toFixed(2)}</text>
+      const ri = secRisk(s, i), h = Math.max(3, ri * 60);
+      return `<g transform="translate(${30 + i * 90},0)"><rect x="0" y="${70 - h}" width="44" height="${h}" rx="3" fill="${rgb(CAT_COL[CAT(gradeOf(ri))])}" opacity="${i === c ? 1 : 0.45}"/>
+        <text x="22" y="${64 - h}" text-anchor="middle" fill="#e6edf3" font-size="11" font-family="JetBrains Mono">${ri.toFixed(2)}</text>
         <text x="22" y="86" text-anchor="middle" fill="#8a98a8" font-size="11" font-family="JetBrains Mono">${cp.id}</text></g>`;
     }).join('');
     return `<div class="det-head"><span class="badge big g-${g}">${g}</span>
@@ -501,11 +555,11 @@
       <dl class="kv"><dt>${J('キロ程', 'Chainage')}</dt><dd class="mono">${s.from_km.toFixed(3)} – ${s.to_km.toFixed(3)} km</dd>
       <dt>${J('構造物', 'Structure')}</dt><dd>${assetLabel(s) ? assetLabel(s) + ' · ' : ''}${assetName(s.asset)}</dd>
       <dt>${J('施工基面高', 'Track level')}</dt><dd>${s.height_m} m ${J('（概略）', '(approx.)')}</dd></dl>
-      <div class="blk"><h3>${J('区間リスクの推移', 'Section risk trend')}</h3><div class="chart"><svg viewBox="0 0 300 92">${bars}</svg></div></div>
-      <div class="blk"><h3>${J(`この区間の損傷（${defs.length}件）`, `Defects in this section (${defs.length})`)}</h3>
+      <div class="blk"><h3>${J('区間リスクの推移', 'Section risk trend')}${filt}</h3><div class="chart"><svg viewBox="0 0 300 92">${bars}</svg></div></div>
+      <div class="blk"><h3>${J(`この区間の損傷（${defs.length}件）`, `Defects in this section (${defs.length})`)}${filt}</h3>
       ${defs.length ? `<ul class="dlist">${defs.map(d => `<li data-act="defect" data-id="${d.id}">
         <span class="badge g-${d.grade[c] || 'none'}">${d.grade[c] || '—'}</span>
-        <span class="grow">${typeName(d.type)} · ${compName(d.component)}<br><span class="muted small">${d.km.toFixed(3)} km · ${d.id}</span></span>
+        <span class="grow">${typeName(d.type)} · ${compName(d.component)}${catTag(d)}<br><span class="muted small">${d.km.toFixed(3)} km · ${d.id}</span></span>
         <span class="mono">${d.risk[c] != null ? d.risk[c].toFixed(2) : J('未検出', 'not detected')}</span></li>`).join('')}</ul>` : `<p class="empty">${J('損傷の検出はありません。', 'No defects detected.')}</p>`}</div>
       <p class="note-ai">${J('区間リスク = 区間内損傷リスクの最大値。', 'Section risk = highest defect risk within the section.')}</p>`;
   }
@@ -552,15 +606,59 @@
   function frameSVG(d, c) {
     const r = rng(hash(d.id + 'f')), W = 320, H = 180, o = d.obs[c];
     const steel = ['主桁（鋼）', '支承', '架線柱'].includes(d.component);
-    const brick = d.asset === 'viaduct_brick' && !steel;
-    const baseCol = steel ? '#5a6876' : brick ? '#8a4c38' : d.component === '法面' ? '#4d5f45' : '#8e9296';
+    const onTrack = catOf(d) === 'track' && d.type !== 'rail_crack';
+    const baseCol = onTrack ? '#6d665d' : steel ? '#5a6876' : d.component === '法面' ? '#4d5f45' : '#8e9296';
     let s = `<rect width="${W}" height="${H}" fill="${baseCol}"/>`;
     for (let i = 0; i < 260; i++) s += `<rect x="${(r() * W).toFixed(1)}" y="${(r() * H).toFixed(1)}" width="${(1 + r() * 3).toFixed(1)}" height="${(1 + r() * 3).toFixed(1)}" fill="${r() < 0.5 ? '#000' : '#fff'}" opacity="${(0.05 + r() * 0.12).toFixed(2)}"/>`;
-    if (brick) for (let y = 0; y < H; y += 14) { s += `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="#d6c7b8" stroke-opacity=".35"/>`; for (let x = (y / 14) % 2 ? 0 : 20; x < W; x += 40) s += `<line x1="${x}" x2="${x}" y1="${y}" y2="${y + 14}" stroke="#d6c7b8" stroke-opacity=".35"/>`; }
     const cx = 150 + (r() - 0.5) * 40, cy = 92 + (r() - 0.5) * 20;
     let bx = cx - 70, by = cy - 48, bw = 140, bh = 96;
     const sevW = o ? o.sev : 0.4;
+    // top-down view of the track (nadir shot): sleepers + two rails, optionally bent sideways
+    const R1 = 64, R2 = 120;
+    const tracks = (off = () => 0, crackedAt = []) => {
+      let t = '';
+      for (let x = 6, k = 0; x < W; x += 24, k++) {
+        const o2 = off(x + 6);
+        t += `<rect x="${x}" y="${R1 - 26 + o2}" width="12" height="${R2 - R1 + 52}" fill="#a29f97" stroke="#5e5b55" stroke-width="1"/>`;
+        if (crackedAt.includes(k)) t += `<path d="M${x + 2},${R1 - 20 + o2} l8,22 l-6,18 l7,20 l-5,24" fill="none" stroke="#1d1c1a" stroke-width="1.6"/>`;
+      }
+      for (const y0 of [R1, R2]) {
+        let p = '';
+        for (let x = 0; x <= W; x += 4) p += `${x ? 'L' : 'M'}${x},${(y0 + off(x)).toFixed(1)} `;
+        t += `<path d="${p}" fill="none" stroke="#3b3d40" stroke-width="9"/><path d="${p}" fill="none" stroke="#cfd4da" stroke-width="5"/>`;
+      }
+      return t;
+    };
     switch (d.type) {
+      case 'track_geom': {
+        const A = 6 + sevW * 16, off = x => A * Math.exp(-(((x - cx) / 46) ** 2));
+        s += tracks(off);
+        for (const y0 of [R1, R2]) s += `<line x1="0" x2="${W}" y1="${y0}" y2="${y0}" stroke="#38bdf8" stroke-dasharray="6 5" stroke-width="1.4"/>`;
+        s += `<line x1="${cx}" x2="${cx}" y1="${R2}" y2="${R2 + A}" stroke="#ffd166" stroke-width="2"/><text x="${cx + 6}" y="${R2 + A + 14}" font-size="11" font-family="JetBrains Mono" fill="#ffd166">Δ ${o ? fmt(o.value, 0) : '—'} mm</text>`;
+        bx = cx - 75; by = R1 - 30; bw = 150; bh = R2 - R1 + 60 + A;
+        break;
+      }
+      case 'rail_crack': {
+        // close-up of one rail head
+        s += `<rect x="0" y="${cy - 34}" width="${W}" height="68" fill="#3b3d40"/><rect x="0" y="${cy - 24}" width="${W}" height="48" fill="#cfd4da"/>`;
+        s += `<rect x="0" y="${cy - 8}" width="${W}" height="16" fill="#e6eaee" opacity=".6"/>`;   // running band
+        s += `<ellipse cx="${cx - 10}" cy="${cy - 2}" rx="${10 + sevW * 16}" ry="9" fill="#55585c" opacity=".85"/>`;   // shelling
+        s += `<path d="M${cx},${cy - 24} l-4,10 l6,9 l-5,10 l4,10 l-3,9" fill="none" stroke="#141414" stroke-width="${(1.2 + sevW * 2).toFixed(1)}"/>`;
+        bx = cx - 50; by = cy - 40; bw = 90; bh = 80;
+        break;
+      }
+      case 'ballast': {
+        s += tracks();
+        for (let i = 0; i < 16; i++) s += `<ellipse cx="${(cx + (r() - 0.5) * 120).toFixed(1)}" cy="${(cy + (r() - 0.5) * 70).toFixed(1)}" rx="${(6 + r() * 16 * (0.5 + sevW)).toFixed(1)}" ry="${(4 + r() * 8).toFixed(1)}" fill="${r() < 0.5 ? '#4a3f33' : '#6b5a46'}" opacity="${(0.65 + r() * 0.3).toFixed(2)}"/>`;
+        s += tracks().replace(/<rect[^>]*\/>/g, '');   // rails back on top of the mud
+        break;
+      }
+      case 'sleeper': {
+        const k0 = Math.round((cx - 6) / 24) - 1, n = Math.max(1, Math.round(sevW * 6));
+        s += tracks(undefined, Array.from({ length: n }, (_, i) => k0 + i));
+        bx = k0 * 24; by = R1 - 32; bw = n * 24 + 18; bh = R2 - R1 + 64;
+        break;
+      }
       case 'crack': {
         let x = cx - 62, y = cy - 36, p = `M${x},${y}`;
         while (x < cx + 62) { x += 6 + r() * 8; y += (r() - 0.35) * 9; p += ` L${x.toFixed(1)},${y.toFixed(1)}`; }
@@ -594,7 +692,8 @@
         break;
     }
     const g = o ? d.grade[c] : 'B', col = rgb(GCOL[g]);
-    const lbl = `${typeInfo(d.type).en} ${o ? Math.round(o.conf * 100) : '--'}%`;
+    const short = { track_geom: 'Misalignment', ballast: 'Mud pumping', sleeper: 'Sleeper crack', missing: 'Missing part' }[d.type] || typeInfo(d.type).en;
+    const lbl = `${short} ${o ? Math.round(o.conf * 100) : '--'}%`;
     s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="${col}" stroke-width="2.5"/>`;
     s += `<rect x="${bx}" y="${by - 17}" width="${lbl.length * 6.6 + 10}" height="17" fill="${col}"/><text x="${bx + 5}" y="${by - 5}" font-size="11" font-family="JetBrains Mono" fill="#0a0e13" font-weight="600">${lbl}</text>`;
     s += `<text x="8" y="16" font-size="10" font-family="JetBrains Mono" fill="#fff" opacity=".85">● REC ${o ? o.frame.flight : ''}</text>`;
@@ -611,9 +710,12 @@
       const col = sectionColor(s);
       return `<b data-id="${s.id}" class="${s.id === selSec ? 'sel' : ''}" title="${s.id} ${between(s)}" style="left:${s.from_km / T * 100}%;width:${(s.to_km - s.from_km) / T * 100}%;background:${rgb(col.slice(0, 3))}"></b>`;
     }).join('');
-    $('stripMarks').innerHTML = D.defects.filter(d => d.obs[c] && GRANK[d.grade[c]] <= GRANK.A2)
+    $('stripMarks').innerHTML = D.defects.filter(d => d.obs[c] && inCat(d) && GRANK[d.grade[c]] <= GRANK.A2)
       .map(d => `<i style="left:${d.km / T * 100}%;color:${rgb(GCOL[d.grade[c]])}" title="${d.id}"></i>`).join('');
-    $('stripLabels').innerHTML = L.stations.map(st => `<span class="${MAJOR.has(st.name) ? 'major' : 'minor'}" style="left:${st.km / T * 100}%">${stName(st.name)}</span>`).join('');
+    $('stripLabels').innerHTML = L.stations.map(st => {
+      const f = st.km / T, edge = f < 0.03 ? ' at-start' : f > 0.97 ? ' at-end' : '';
+      return `<span class="${MAJOR.has(st.name) ? 'major' : 'minor'}${edge}" style="left:${f * 100}%">${stName(st.name)}</span>`;
+    }).join('');
   }
   $('stripTrack').addEventListener('click', e => { const b = e.target.closest('b[data-id]'); if (b) select('section', b.dataset.id); });
 
@@ -636,11 +738,18 @@
     $('btnLang').textContent = tr('langBtn');
     $('btnLang').title = tr('langTitle');
     $('subtitle').textContent = EN(lang)
-      ? `${D.line.name_en || D.line.name} (Tokyo) · ${(L.length_m / 1000).toFixed(1)} km · ${L.stations.length} stations · Drone × AI Inspection — Concept Demo`
-      : `${D.line.name}（${D.line.city}）· ${(L.length_m / 1000).toFixed(1)} km · ${L.stations.length}駅 · Drone × AI Inspection — Concept Demo`;
+      ? `${L.name_en} (${L.city_en}) · ${(L.length_m / 1000).toFixed(1)} km · ${L.stations.length} stations · Drone × AI Inspection — Concept Demo`
+      : `${L.name}（${L.city}）· ${(L.length_m / 1000).toFixed(1)} km · ${L.stations.length}駅 · Drone × AI Inspection — Concept Demo`;
     [...$('campaigns').children].forEach((b, i) => { b.title = campLabel(D.campaigns[i]); });
+    $('lineSel').innerHTML = LINES.map(l => `<option value="${l.id}"${l.id === lineId ? ' selected' : ''}>${lineName(l)}</option>`).join('');
+    $('lineSel').title = tr('lineTitle');
   }
   $('campaigns').innerHTML = D.campaigns.map((cp, i) => `<button type="button" role="tab" data-i="${i}">${cp.id}</button>`).join('');
+  $('lineSel').addEventListener('change', e => {
+    // each line has its own data files: reload with ?line= (language is kept in localStorage)
+    try { localStorage.setItem('railDemo.line', e.target.value); } catch (err) { /* storage blocked */ }
+    location.href = `${location.pathname}?line=${encodeURIComponent(e.target.value)}`;
+  });
   $('btnLang').addEventListener('click', () => {
     lang = EN(lang) ? 'ja' : 'en';
     try { localStorage.setItem('railDemo.lang', lang); } catch (e) { /* storage blocked */ }
@@ -671,10 +780,11 @@
   applyStaticText();
   renderAll();
 
-  // debug / presentation hooks (e.g. ?defect=D-0001)
+  // debug / presentation hooks (e.g. ?line=JY&defect=D-0001, ?cat=track)
   window.__railDemo = { map, state, select };
   const q = new URLSearchParams(location.search);
+  if (['all', 'structure', 'track'].includes(q.get('cat'))) { state.cat = q.get('cat'); renderAll(); }
   if (q.get('campaign')) { const i = D.campaigns.findIndex(cp => cp.id === q.get('campaign')); if (i >= 0) { state.c = i; renderAll(); } }
   if (q.get('defect') && defById.has(q.get('defect'))) select('defect', q.get('defect'));
   else if (q.get('section') && secById.has(q.get('section'))) select('section', q.get('section'));
-})();
+}

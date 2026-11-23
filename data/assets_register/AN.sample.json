@@ -1,0 +1,44 @@
+[
+    {
+        "from_km":  0,
+        "to_km":  7.8,
+        "asset":  "viaduct_rc",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  7.8,
+        "to_km":  8,
+        "asset":  "bridge_steel",
+        "label":  "荒子川橋梁（仮）",
+        "label_en":  "Arako River bridge (tentative)"
+    },
+    {
+        "from_km":  8,
+        "to_km":  10.8,
+        "asset":  "viaduct_rc",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  10.8,
+        "to_km":  11,
+        "asset":  "bridge_steel",
+        "label":  "運河橋梁（仮）",
+        "label_en":  "Canal bridge (tentative)"
+    },
+    {
+        "from_km":  11,
+        "to_km":  12.2,
+        "asset":  "viaduct_rc",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  12.2,
+        "to_km":  15.238,
+        "asset":  "earthwork",
+        "label":  null,
+        "label_en":  null
+    }
+]

@@ -1,0 +1,93 @@
+[
+    {
+        "from_km":  0,
+        "to_km":  0.4,
+        "asset":  "earthwork",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  0.4,
+        "to_km":  0.6,
+        "asset":  "bridge_steel",
+        "label":  "大川橋梁（仮）",
+        "label_en":  "Okawa River bridge (tentative)"
+    },
+    {
+        "from_km":  0.6,
+        "to_km":  2.8,
+        "asset":  "earthwork",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  2.8,
+        "to_km":  3,
+        "asset":  "bridge_steel",
+        "label":  "寝屋川橋梁（仮）",
+        "label_en":  "Neya River bridge (tentative)"
+    },
+    {
+        "from_km":  3,
+        "to_km":  5.2,
+        "asset":  "earthwork",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  5.2,
+        "to_km":  9,
+        "asset":  "viaduct_rc",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  9,
+        "to_km":  10.2,
+        "asset":  "earthwork",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  10.2,
+        "to_km":  12.6,
+        "asset":  "viaduct_rc",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  12.6,
+        "to_km":  12.8,
+        "asset":  "bridge_steel",
+        "label":  "木津川橋梁（仮）",
+        "label_en":  "Kizu River bridge (tentative)"
+    },
+    {
+        "from_km":  12.8,
+        "to_km":  16,
+        "asset":  "viaduct_rc",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  16,
+        "to_km":  16.2,
+        "asset":  "bridge_steel",
+        "label":  "安治川橋梁（仮）",
+        "label_en":  "Aji River bridge (tentative)"
+    },
+    {
+        "from_km":  16.2,
+        "to_km":  20,
+        "asset":  "viaduct_rc",
+        "label":  null,
+        "label_en":  null
+    },
+    {
+        "from_km":  20,
+        "to_km":  21.763,
+        "asset":  "earthwork",
+        "label":  null,
+        "label_en":  null
+    }
+]

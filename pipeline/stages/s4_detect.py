@@ -3,8 +3,11 @@
 Input   02_frames/frames.json (+ images)
 Output  04_detect/detections.json   list[Detection]
 
-Model: instance segmentation (e.g. YOLOv8/YOLO11-seg) fine-tuned on 7 classes:
-    crack, spalling, rebar, rust, leak, deform, missing
+Model: instance segmentation (e.g. YOLOv8/YOLO11-seg) fine-tuned on 10 image classes:
+    structure: crack, spalling, rebar, rust, leak, deform, missing
+    track:     rail_crack, ballast (mud pumping), sleeper (cracked sleeper)  [+ missing fastenings]
+Track geometry (track_geom: alignment / level irregularity) is NOT an image class: it is measured
+from the stage-3 point cloud (rail-head extraction -> versine on a 10 m chord), see s6_assess.
 Cracks are thin (often 0.2 mm ≈ 1-3 px), so images are processed in overlapping tiles
 (SAHI-style) at full resolution instead of being resized to 640 px.
 
@@ -21,7 +24,7 @@ from typing import Iterable, Protocol
 
 from ..core import Context, Detection, log, read_json, write_json
 
-CLASSES = ["crack", "spalling", "rebar", "rust", "leak", "deform", "missing"]
+CLASSES = ["crack", "spalling", "rebar", "rust", "leak", "deform", "missing", "rail_crack", "ballast", "sleeper"]
 
 
 class Detector(Protocol):

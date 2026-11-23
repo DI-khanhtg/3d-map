@@ -3,72 +3,77 @@
         "from_km":  0,
         "to_km":  2.4,
         "asset":  "earthwork",
-        "label":  null
+        "label":  null,
+        "label_en":  null
     },
     {
         "from_km":  2.4,
         "to_km":  2.6,
         "asset":  "bridge_steel",
-        "label":  "目黒川橋梁（仮）"
+        "label":  "目黒川橋梁（仮）",
+        "label_en":  "Meguro River bridge (tentative)"
     },
     {
         "from_km":  2.6,
         "to_km":  13.6,
         "asset":  "earthwork",
-        "label":  null
+        "label":  null,
+        "label_en":  null
     },
     {
         "from_km":  13.6,
         "to_km":  13.8,
         "asset":  "bridge_steel",
-        "label":  "神田川橋梁（仮）"
+        "label":  "神田川橋梁（仮）",
+        "label_en":  "Kanda River bridge (tentative)"
     },
     {
         "from_km":  13.8,
         "to_km":  18.6,
         "asset":  "earthwork",
-        "label":  null
+        "label":  null,
+        "label_en":  null
     },
     {
         "from_km":  18.6,
         "to_km":  18.8,
         "asset":  "bridge_steel",
-        "label":  "跨線橋（仮）"
+        "label":  "跨線橋（仮）",
+        "label_en":  "Overbridge (tentative)"
     },
     {
         "from_km":  18.8,
         "to_km":  24,
         "asset":  "earthwork",
-        "label":  null
+        "label":  null,
+        "label_en":  null
     },
     {
         "from_km":  24,
-        "to_km":  27.8,
-        "asset":  "viaduct_rc",
-        "label":  null
-    },
-    {
-        "from_km":  27.8,
         "to_km":  31,
-        "asset":  "viaduct_brick",
-        "label":  null
+        "asset":  "viaduct_rc",
+        "label":  null,
+        "label_en":  null
     },
     {
         "from_km":  31,
         "to_km":  32.4,
         "asset":  "earthwork",
-        "label":  null
+        "label":  null,
+        "label_en":  null
     },
     {
         "from_km":  32.4,
         "to_km":  33.8,
         "asset":  "viaduct_rc",
-        "label":  null
+        "label":  null,
+        "label_en":  null
     },
     {
         "from_km":  33.8,
         "to_km":  34.493,
         "asset":  "earthwork",
-        "label":  null
+        "label":  null,
+        "label_en":  null
     }
 ]

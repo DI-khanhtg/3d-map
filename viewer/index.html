@@ -25,6 +25,7 @@
     </div>
     <div class="controls">
       <button class="btn only-mobile" id="btnList" type="button" data-i18n="list">一覧</button>
+      <select class="sel" id="lineSel" aria-label="Line"></select>
       <div class="seg" id="campaigns" role="tablist" aria-label="検査年度"></div>
       <label class="tog"><input type="checkbox" id="tCompare" /> <span data-i18n="compare">前回比較</span></label>
       <label class="tog"><input type="checkbox" id="tFlights" checked /> <span data-i18n="flights">飛行ルート</span></label>
@@ -44,6 +45,8 @@
       </div>
       <ol class="pipeline" id="pipeline"></ol>
     </section>
+
+    <div class="catseg" id="catSeg" role="group" aria-label="Defect category"></div>
 
     <section class="kpis" id="kpis"></section>
 
@@ -73,8 +76,7 @@
   <div class="mock-banner" data-i18n="banner">デモ用の擬似点検データ · 線形 © OpenStreetMap contributors</div>
   <div id="toast" role="status" aria-live="polite"></div>
 
-  <script src="data/rail_line.js"></script>
-  <script src="data/inspection.js"></script>
+  <script src="data/lines.js"></script>
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/deck.gl@9.0.38/dist.min.js"></script>
   <script src="app.js"></script>

@@ -27,11 +27,19 @@ SEVERITY = {
     "leak":     lambda d: clamp(d["area_cm2"] / 1500),
     "deform":   lambda d: clamp(d.get("displacement_mm", 12) / 40),   # needs point-cloud diff (TODO)
     "missing":  lambda d: 0.4,
+    # track (rail_crack length from the mask skeleton; ballast = fouled area; sleeper = count of cracked sleepers)
+    "rail_crack": lambda d: clamp(d["length_mm"] / 40),
+    "ballast":    lambda d: clamp(d.get("area_m2", d.get("area_cm2", 0) / 1e4) / 10),
+    "sleeper":    lambda d: clamp(d.get("count", 1) / 8),
+    # track geometry from the point cloud: versine (mm) on a 10 m chord; ~30 mm = act now (tune to the operator's limits)
+    "track_geom": lambda d: clamp(d.get("versine_mm", 0) / 30),
 }
 VALUE = {   # value shown in the viewer, in the unit of catalog.defect_types[type].unit
     "crack": lambda d: round(d["length_mm"] / 10, 1), "spalling": lambda d: d["area_cm2"],
     "rebar": lambda d: round(d["length_mm"] / 10, 1), "rust": lambda d: d["area_cm2"],
     "leak": lambda d: d["area_cm2"], "deform": lambda d: d.get("displacement_mm", 0), "missing": lambda d: 1,
+    "rail_crack": lambda d: round(d["length_mm"], 1), "ballast": lambda d: round(d.get("area_m2", d.get("area_cm2", 0) / 1e4), 1),
+    "sleeper": lambda d: d.get("count", 1), "track_geom": lambda d: round(d.get("versine_mm", 0), 1),
 }
 
 
@@ -62,7 +70,7 @@ def guess_component(asset_def: dict, z: float, defect_type: str) -> tuple[str, f
     if h and z > h + 0.5:
         pick = next((c for c in comps if c[0] in ("高欄", "架線柱")), comps[0])
     elif h and z < h * 0.7:
-        pick = next((c for c in comps if c[0] in ("橋脚", "アーチ部", "橋台")), comps[0])
+        pick = next((c for c in comps if c[0] in ("橋脚", "橋台")), comps[0])
     else:
         pick = comps[0]
     return pick[0], float(pick[1])
@@ -73,6 +81,7 @@ def run(ctx: Context) -> None:
     reg_path = ROOT / ctx.cfg["assets_register"] if ctx.cfg.get("assets_register") else None
     register = read_json(reg_path) if reg_path and reg_path.exists() else []
     default_asset = catalog.get("default_asset", "earthwork")
+    track_comps = set(catalog.get("track_components", []))
 
     current = read_json(ctx.ws / "05_localize" / "defects.json")
     prev_path = ctx.ws.parent / ctx.cfg["previous_campaign"] / "06_assess" / "defects.json" \
@@ -90,8 +99,10 @@ def run(ctx: Context) -> None:
                "width_mm": d["width_mm"] if d["type"] == "crack" else None, "n_views": d["n_views"]}
         history = dict(old.get("history", {}))
         history[ctx.campaign] = obs
+        # track vs structure follows the component (missing bolts on a girder = structure, on a fastening = track)
+        cat = "track" if component in track_comps else catalog["defect_types"][d["type"]].get("cat", "structure")
         out.append({**{k: d[k] for k in ("id", "type", "lon", "lat", "z", "km", "bearing", "section_idx")},
-                    "asset": reg["asset"], "component": component, "crit": crit, "history": history})
+                    "asset": reg["asset"], "component": component, "cat": cat, "crit": crit, "history": history})
 
     # defects seen before but not re-detected this time: keep them (could be repaired, occluded, or missed)
     seen = {d["id"] for d in out}

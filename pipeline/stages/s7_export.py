@@ -42,12 +42,16 @@ def run(ctx: Context) -> None:
         defects.append({
             "id": d["id"], "section": f"{meta['id']}-S{d['section_idx']:03d}", "km": d["km"],
             "lon": d["lon"], "lat": d["lat"], "z": d["z"], "bearing": d["bearing"],
-            "type": d["type"], "component": d["component"], "asset": d["asset"], "crit": d["crit"],
-            "story": False, "note": "", "obs": obs, "risk": risk, "grade": grade,
+            "type": d["type"], "component": d["component"], "cat": d.get("cat", "structure"), "asset": d["asset"], "crit": d["crit"],
+            "story": False, "note": "", "note_en": "", "obs": obs, "risk": risk, "grade": grade,
         })
 
     # ---- sections
     def between(s_m: float) -> list[str]:
+        if not meta.get("loop", True):   # point-to-point line: clamp to the first / last station pair
+            i = max([k for k, st in enumerate(stations) if st["km"] * 1000 <= s_m] or [0])
+            i = min(i, len(stations) - 2)
+            return [stations[i]["name"], stations[i + 1]["name"]]
         prev = stations[-1]["name"]
         nxt = stations[0]["name"]
         for st in stations:
@@ -72,14 +76,14 @@ def run(ctx: Context) -> None:
         srisk = [max([0.05] + [d["risk"][c] for d in mine if d["risk"][c] is not None]) for c in range(len(cids))]
         sections.append({
             "id": sid, "idx": k, "from_km": round(s0 / 1000, 3), "to_km": round(s1 / 1000, 3),
-            "between": between((s0 + s1) / 2), "asset": reg["asset"], "asset_label": reg.get("label"), "height_m": h,
+            "between": between((s0 + s1) / 2), "asset": reg["asset"], "asset_label": reg.get("label"), "asset_label_en": reg.get("label_en"), "height_m": h,
             "path": [[round(p[0], 6), round(p[1], 6), h] for p in pts],
             "risk": srisk, "grade": [grade_of(r, grades) for r in srisk], "defects": [d["id"] for d in mine],
         })
 
     data = {
-        "schema": "rail-inspection/0.1", "generated_by": "pipeline/run.py", "mock": ctx.cfg["detect"].get("kind") == "mock",
-        "line": {"id": meta["id"], "name": meta["name"], "name_en": meta.get("name_en"), "city": meta.get("city")},
+        "schema": "rail-inspection/0.2", "generated_by": "pipeline/run.py", "mock": ctx.cfg["detect"].get("kind") == "mock",
+        "line": {k: meta.get(k) for k in ("id", "name", "name_en", "city", "city_en", "loop")},
         "section_length_m": L, "campaigns": campaigns,
         "defect_types": catalog["defect_types"], "asset_types": catalog["asset_types"], "grades": catalog["grades"],
         "risk_formula": "risk = 0.8*severity*(0.6+0.4*criticality) + 0.2*growth",

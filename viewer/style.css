@@ -55,6 +55,29 @@ h2 { font-size: 13px; font-weight: 700; margin: 0; letter-spacing: 0.02em; }
 .btn:hover { border-color: var(--accent); }
 .btn.primary { background: var(--accent); color: #04131c; border-color: var(--accent); font-weight: 600; }
 .only-mobile { display: none; }
+.sel {
+  background: #16202b; border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 28px 6px 10px; cursor: pointer;
+  color: var(--text); font: inherit; font-weight: 500; appearance: none; max-width: 240px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 52%, calc(100% - 9px) 52%; background-size: 5px 5px; background-repeat: no-repeat;
+}
+.sel:hover, .sel:focus-visible { border-color: var(--accent); outline: none; }
+.sel option { background: var(--panel-solid); }
+
+/* defect category filter (All / Structure / Track) */
+.catseg { display: flex; align-items: center; gap: 4px; }
+.catseg .lbl { color: var(--muted); font-size: 11px; margin-right: 4px; }
+.catseg button {
+  flex: 1; background: transparent; border: 1px solid var(--line-2); border-radius: 8px; padding: 4px 6px; cursor: pointer;
+  color: var(--muted); font-size: 12px; white-space: nowrap;
+}
+.catseg button .n { font-family: var(--mono); font-size: 11px; opacity: .8; }
+.catseg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #04131c; font-weight: 600; }
+.cat-tag {
+  display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 4px; vertical-align: 1px;
+  font-size: 9.5px; font-weight: 600; line-height: 15px; letter-spacing: .03em;
+  color: #c4b5fd; border: 1px solid rgba(196, 181, 253, .45); background: rgba(139, 92, 246, .12);
+}
 
 /* ---------- map ---------- */
 #map { position: fixed; inset: var(--hdr) 0 0 0; }
@@ -187,7 +210,11 @@ body.has-detail .maplibregl-ctrl-top-right { right: calc(var(--detail-w) + var(-
 .strip-labels { position: relative; height: 22px; font-size: 10px; color: var(--muted); }
 .strip-labels span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
 .strip-labels span::before { content: ""; position: absolute; left: 50%; top: -3px; width: 1px; height: 4px; background: var(--muted); }
-.strip-labels span:first-child { transform: translateX(-6px); }   /* label at 0 km: keep inside the panel */
+/* labels at either end of the line: keep inside the panel */
+.strip-labels span.at-start { transform: translateX(-6px); }
+.strip-labels span.at-start::before { left: 6px; }
+.strip-labels span.at-end { transform: translateX(calc(-100% + 6px)); }
+.strip-labels span.at-end::before { left: auto; right: 6px; }
 .strip-labels span.minor { color: transparent; }
 .strip-labels span.minor:hover { color: var(--text); }
 .strip-labels span.major { color: var(--text); font-weight: 500; }

@@ -8,7 +8,7 @@ venv/
 workspace/
 models/
 pipeline/config.yaml
-viewer/data/inspection.pipeline.js
+viewer/data/*/inspection.pipeline.js
 
 # OS / editor
 .DS_Store

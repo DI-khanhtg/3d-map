@@ -2,11 +2,11 @@
 # Paths are relative to the repository root.
 
 workspace: workspace                # <workspace>/<campaign>/raw/<flight_id>/*.MP4|*.SRT|*.JPG
-rail_line_js: viewer/data/rail_line.js
-line_closed: true                   # Yamanote is a loop
+rail_line_js: viewer/data/JY/rail_line.js   # one folder per line: JY = Yamanote, O = Osaka Loop, AN = Aonami
+line_closed: true                   # Yamanote / Osaka Loop: true, Aonami: false
 section_length_m: 200
-catalog: data/demo_scenario.json    # uses defect_types / asset_types / grades / default_asset
-assets_register: data/assets_register.sample.json   # 構造物台帳 extract: [{from_km, to_km, asset, label}]
+catalog: data/demo_scenario.json    # uses defect_types / asset_types / grades / default_asset / track_components
+assets_register: data/assets_register/JY.sample.json   # 構造物台帳 extract: [{from_km, to_km, asset, label, label_en}]
 previous_campaign: "2025"           # for ID tracking + deterioration trend (null for the first campaign)
 
 campaigns:                          # all campaigns shown in the viewer, oldest first
@@ -44,4 +44,4 @@ localize:
   match_radius_m: 2.0               # same defect across campaigns
 
 export:
-  viewer_js: viewer/data/inspection.pipeline.js   # rename to inspection.js to show it in the viewer
+  viewer_js: viewer/data/JY/inspection.pipeline.js   # rename to inspection.js (same folder) to show it in the viewer
